@@ -12,7 +12,6 @@ module "vpc" {
   name                                      = "app1"
   environment                               = "test"
   label_order                               = ["name", "environment"]
-  project                                   = "opz0-397319"
   network_firewall_policy_enforcement_order = "AFTER_CLASSIC_FIREWALL"
 }
 
@@ -25,8 +24,7 @@ module "subnet" {
   environment   = "test"
   gcp_region    = "asia-northeast1"
   network       = module.vpc.vpc_id
-  project_id    = "opz0-397319"
-  source_ranges = ["10.10.0.0/16"]
+  ip_cidr_range = "10.10.0.0/16"
 }
 
 #####==============================================================================
@@ -36,7 +34,6 @@ module "firewall" {
   source        = "git::git@github.com:opsstation/terraform-gcp-firewall.git?ref=master"
   name          = "app1"
   environment   = "test"
-  project_id    = "opz0-397319"
   network       = module.vpc.vpc_id
   source_ranges = ["0.0.0.0/0"]
 
@@ -59,7 +56,6 @@ module "compute_instance" {
   name                     = "instance"
   environment              = "test"
   region                   = "asia-northeast1"
-  project_id               = "opz0-397319"
   zone                     = "asia-northeast1-a"
   subnetwork               = module.subnet.subnet_id
   num_instances            = 1

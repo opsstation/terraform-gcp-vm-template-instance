@@ -1,11 +1,13 @@
 module "labels" {
   source = "git::git@github.com:opsstation/terraform-gcp-labels.git?ref=master"
-
   name        = var.name
   environment = var.environment
   label_order = var.label_order
+  managedby   = var.managedby
+  repository  = var.repository
 }
-
+data "google_client_config" "current" {
+}
 ###########################################
 locals {
   source_image         = var.source_image != "" ? var.source_image : "ubuntu-2204-jammy-v20230908"
@@ -44,7 +46,7 @@ locals {
 resource "google_compute_instance_template" "tpl" {
   count                   = var.instance_template ? 1 : 0
   name_prefix             = format("%s-%s", module.labels.id, (count.index))
-  project                 = var.project_id
+  project                 = data.google_client_config.current.project
   machine_type            = var.machine_type
   labels                  = var.labels
   metadata                = var.metadata
