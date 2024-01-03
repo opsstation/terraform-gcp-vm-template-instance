@@ -1,5 +1,5 @@
 provider "google" {
-  project = "opz0-397319"
+  project = "local-concord-408802"
   region  = "asia-northeast1"
   zone    = "asia-northeast1-a"
 }
@@ -10,7 +10,7 @@ provider "google" {
 
 module "vpc" {
   source                                    = "git::git@github.com:opsstation/terraform-gcp-vpc.git?ref=master"
-  name                                      = "app"
+  name                                      = "dev"
   environment                               = "test"
   label_order                               = ["name", "environment"]
   network_firewall_policy_enforcement_order = "AFTER_CLASSIC_FIREWALL"
@@ -21,7 +21,7 @@ module "vpc" {
 ######==============================================================================
 module "subnet" {
   source        = "git::git@github.com:opsstation/terraform-gcp-subnet.git?ref=master"
-  name          = "subnet"
+  name          = "dev"
   environment   = "test"
   gcp_region    = "asia-northeast1"
   network       = module.vpc.vpc_id
@@ -33,7 +33,7 @@ module "subnet" {
 #####==============================================================================
 module "firewall" {
   source        = "git::git@github.com:opsstation/terraform-gcp-firewall.git?ref=master"
-  name          = "app"
+  name          = "dev"
   environment   = "test"
   network       = module.vpc.vpc_id
   source_ranges = ["0.0.0.0/0"]
@@ -51,40 +51,39 @@ module "firewall" {
 
 module "instance_template" {
   source               = "../../"
-  instance_template    = true
-  name                 = "template"
+  name                 = "dev"
   environment          = "test"
   region               = "asia-northeast1"
   source_image         = "ubuntu-2204-jammy-v20230908"
   source_image_family  = "ubuntu-2204-lts"
   source_image_project = "ubuntu-os-cloud"
+  disk_size_gb         = "20"
   subnetwork           = module.subnet.subnet_id
+  instance_template    = true
   service_account      = null
+  ## public IP if enable_public_ip is true
+  enable_public_ip = true
   metadata = {
     ssh-keys = <<EOF
-      dev:ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCx9HrdPJD7zv9SJlAKlssHr2CUSvifRBy+bRp2jRvP851p8RiMshlbrkaRAJV7gh0AFAxL6S7znWzGwFQZFv/XP9fEqD8B7XEOtVIZK+99AYRZfkO62WG5BR6vmN1u3ei2zHSY2IuCmita27BOaimfUCXFdPMUMXwKoTMvThK6UVKaoa+IWR7qkG0b7ByLKZBTsCgBlXH4xLkZsFdCsEDWog4ZJcY5F2tPwZkHoqI0g45CcJMlsfC1KMOkN0MLPAR/iR/wfsQ9Zp0GGFwAn3uJXrcAjUGv1/+giw7RYEnmR3PA5CpzuTNJrnNI2KoFUmh7HSRt5atNg0AEj+043I7B23/yKNBaiqqaNSiv5/qO29n1eSkDhQ7l2sLxAcMS3PkTMKcsf89KkqHDt8AEBWUuCPwVTrsSwAF1Fcfj4Fe4LQUYogM5d+Y3u95LdaaCizM8i/RJ0R6aR//OLtvlHeGJFVjSPiazVJea8ZvR+4nO4b67ic6YZvwfVCEUw+ttbb0= kamal@kamal
+      dev:ssh-rsa AAAAB3NzaC1yc2EAA/3mwt2y+PDQMU= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCx9HrdPJD7zv9SJlAKlssHr2CUSvifRBy+bRp2jRvP851p8RiMshlbrkaRAJV7gh0AFAxL6S7znWzGwFQZFv/XP9fEqD8B7XEOtVIZK+99AYRZfkO62WG5BR6vmN1u3ei2zHSY2IuCmita27BOaimfUCXFdPMUMXwKoTMvThK6UVKaoa+IWR7qkG0b7ByLKZBTsCgBlXH4xLkZsFdCsEDWog4ZJcY5F2tPwZkHoqI0g45CcJMlsfC1KMOkN0MLPAR/iR/wfsQ9Zp0GGFwAn3uJXrcAjUGv1/+giw7RYEnmR3PA5CpzuTNJrnNI2KoFUmh7HSRt5atNg0AEj+043I7B23/yKNBaiqqaNSiv5/qO29n1eSkDhQ7l2sLxAcMS3PkTMKcsf89KkqHDt8AEBWUuCPwVTrsSwAF1Fcfj4Fe4LQUYogM5d+Y3u95LdaaCizM8i/RJ0R6aR//OLtvlHeGJFVjSPiazVJea8ZvR+4nO4b67ic6YZvwfVCEUw+ttbb0= kamal@kamal
     EOF
   }
 }
-
 #####==============================================================================
 ##### compute_instance module call.
 #####==============================================================================
 module "compute_instance" {
-  source                   = "../../"
-  instance_from_template   = true
-  name                     = "instance"
-  environment              = "test"
-  region                   = "asia-northeast1"
-  zone                     = "asia-northeast1-a"
-  subnetwork               = module.subnet.subnet_id
-  num_instances            = "1"
-  source_instance_template = module.instance_template.self_link_unique
-  deletion_protection      = false
-  service_account          = null
+  source                 = "../../"
+  name                   = "dev"
+  environment            = "instance"
+  region                 = "asia-northeast1"
+  zone                   = "asia-northeast1-a"
+  subnetwork             = module.subnet.subnet_id
+  instance_from_template = true
+  deletion_protection    = false
+  service_account        = null
 
-  access_config = [{
-    nat_ip       = ""
-    network_tier = ""
-  }, ]
+  ## public IP if enable_public_ip is true
+  enable_public_ip         = true
+  source_instance_template = module.instance_template.self_link_unique
 }

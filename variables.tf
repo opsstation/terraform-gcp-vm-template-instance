@@ -371,4 +371,9 @@ variable "instance_from_template" {
   description = ""
 }
 
+variable "enable_public_ip" {
+  type = bool
+  default = true
+}
+
 
