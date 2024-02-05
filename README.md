@@ -111,7 +111,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | 5.11.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.6.6 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | >= 3.50, < 5.13.0 |
 
 ## Providers
