@@ -18,7 +18,7 @@ variable "label_order" {
 
 variable "managedby" {
   type        = string
-  default     = ""
+  default     = "opsstation"
   description = "ManagedBy,opsstation'."
 }
 
@@ -28,11 +28,6 @@ variable "repository" {
   description = "Terraform current module repo"
 }
 
-variable "project_id" {
-  type        = string
-  description = "The GCP project ID"
-  default     = ""
-}
 
 variable "machine_type" {
   description = "Machine type to create, e.g. n1-standard-1"
@@ -92,12 +87,6 @@ variable "enable_nested_virtualization" {
   type        = bool
   description = "Defines whether the instance should have nested virtualization enabled."
   default     = false
-}
-
-variable "nat_ip" {
-  description = "Public ip address"
-  type        = bool
-  default     = null
 }
 
 variable "threads_per_core" {
@@ -263,15 +252,6 @@ variable "enable_confidential_vm" {
   description = "Whether to enable the Confidential VM configuration on the instance. Note that the instance image must support Confidential VMs. See https://cloud.google.com/compute/docs/images"
 }
 
-variable "access_config" {
-  description = "Access configurations, i.e. IPs via which the VM instance can be accessed via the Internet."
-  type = list(object({
-    nat_ip       = string
-    network_tier = string
-  }))
-  default = []
-}
-
 variable "ipv6_access_config" {
   description = "IPv6 access configurations. Currently a max of 1 IPv6 access configuration is supported. If not specified, the instance will have no external IPv6 Internet access."
   type = list(object({
@@ -306,12 +286,6 @@ variable "static_ips" {
   type        = list(string)
   description = "List of static IPs for VM instances"
   default     = []
-}
-
-variable "num_instances" {
-  description = "Number of instances to create. This value is ignored if static_ips is provided."
-  type        = number
-  default     = 1
 }
 
 variable "instance_template" {
@@ -372,7 +346,7 @@ variable "instance_from_template" {
 }
 
 variable "enable_public_ip" {
-  type = bool
+  type    = bool
   default = true
 }
 
