@@ -111,9 +111,10 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | >= 4.75, < 5.0 |
-| <a name="requirement_google-beta"></a> [google-beta](#requirement\_google-beta) | >= 4.75, < 5.13.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.6.6 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | >= 3.50, < 5.11.0 |
+| <a name="requirement_null"></a> [null](#requirement\_null) | 3.2.2 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | 3.6.0 |
 
 ## Providers
 
