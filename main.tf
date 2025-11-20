@@ -1,14 +1,20 @@
 module "labels" {
-  source      = "git::git@github.com:opsstation/terraform-gcp-labels.git?ref=v1.0.0"
+  source      = "opsstation/labels/multicloud"
+  version     = "1.0.0"
   name        = var.name
   environment = var.environment
   label_order = var.label_order
   managedby   = var.managedby
   repository  = var.repository
 }
-data "google_client_config" "current" {
+
+data "google_client_config" "current" {}
+
+data "google_compute_zones" "available" {
+  project = data.google_client_config.current.project
+  region  = var.region
 }
-#-----------------------------------------
+
 locals {
   source_image         = var.source_image != "" ? var.source_image : "ubuntu-2204-jammy-v20230908"
   source_image_family  = var.source_image_family != "" ? var.source_image_family : "ubuntu-2204-lts"
@@ -24,7 +30,6 @@ locals {
       boot         = "true"
     },
   ]
-
   all_disks              = concat(local.boot_disk, var.additional_disks)
   shielded_vm_configs    = var.enable_shielded_vm ? [true] : []
   gpu_enabled            = var.gpu != null
@@ -34,19 +39,25 @@ locals {
     ? "TERMINATE"
     : var.on_host_maintenance
   )
+  min_cpu_platform = var.confidential_instance_type == "SEV_SNP" ? "AMD Milan" : var.min_cpu_platform
+
   automatic_restart = (
-    # must be false when preemptible is true
-    var.preemptible ? false : var.automatic_restart
+    var.preemptible || var.spot ? false : var.automatic_restart
+  )
+  preemptible = (
+    var.preemptible || var.spot ? true : false
   )
 }
 
-#--------------------------------------------------------------------------------
-# Manages a VM instance template resource within GCE.
-#--------------------------------------------------------------------------------
+#####==============================================================================
+##### Manages a VM instance template resource within GCE.
+#####==============================================================================
 resource "google_compute_instance_template" "tpl" {
   count                   = var.instance_template ? 1 : 0
   name_prefix             = format("%s-%s", module.labels.id, (count.index))
   project                 = data.google_client_config.current.project
+  description             = var.description
+  instance_description    = var.instance_description
   machine_type            = var.machine_type
   labels                  = var.labels
   metadata                = var.metadata
@@ -54,22 +65,25 @@ resource "google_compute_instance_template" "tpl" {
   can_ip_forward          = var.can_ip_forward
   metadata_startup_script = var.startup_script
   region                  = var.region
-  min_cpu_platform        = var.min_cpu_platform
+  min_cpu_platform        = local.min_cpu_platform
+  resource_policies       = var.resource_policies
   dynamic "disk" {
     for_each = local.all_disks
     content {
-      auto_delete  = lookup(disk.value, "auto_delete", null)
-      boot         = lookup(disk.value, "boot", null)
-      device_name  = lookup(disk.value, "device_name", null)
-      disk_name    = lookup(disk.value, "disk_name", null)
-      disk_size_gb = lookup(disk.value, "disk_size_gb", lookup(disk.value, "disk_type", null) == "local-ssd" ? "375" : null)
-      disk_type    = lookup(disk.value, "disk_type", null)
-      interface    = lookup(disk.value, "interface", lookup(disk.value, "disk_type", null) == "local-ssd" ? "NVME" : null)
-      mode         = lookup(disk.value, "mode", null)
-      source       = lookup(disk.value, "source", null)
-      source_image = lookup(disk.value, "source_image", null)
-      type         = lookup(disk.value, "disk_type", null) == "local-ssd" ? "SCRATCH" : "PERSISTENT"
-      labels       = lookup(disk.value, "disk_labels", null)
+      auto_delete       = lookup(disk.value, "auto_delete", null)
+      boot              = lookup(disk.value, "boot", null)
+      device_name       = lookup(disk.value, "device_name", null)
+      disk_name         = lookup(disk.value, "disk_name", null)
+      disk_size_gb      = lookup(disk.value, "disk_size_gb", lookup(disk.value, "disk_type", null) == "local-ssd" ? "375" : null)
+      disk_type         = lookup(disk.value, "disk_type", null)
+      interface         = lookup(disk.value, "interface", lookup(disk.value, "disk_type", null) == "local-ssd" ? "NVME" : null)
+      mode              = lookup(disk.value, "mode", null)
+      source            = lookup(disk.value, "source", null)
+      source_image      = lookup(disk.value, "source_image", null)
+      source_snapshot   = lookup(disk.value, "source_snapshot", null)
+      type              = lookup(disk.value, "disk_type", null) == "local-ssd" ? "SCRATCH" : "PERSISTENT"
+      labels            = lookup(disk.value, "disk_labels", null)
+      resource_policies = lookup(disk.value, "resource_policies", [])
 
       dynamic "disk_encryption_key" {
         for_each = compact([var.disk_encryption_key == null ? null : 1])
@@ -93,6 +107,7 @@ resource "google_compute_instance_template" "tpl" {
     subnetwork         = var.subnetwork
     subnetwork_project = var.subnetwork_project
     network_ip         = length(var.network_ip) > 0 ? var.network_ip : null
+    nic_type           = var.nic_type
     stack_type         = var.stack_type
     dynamic "access_config" {
       for_each = var.enable_public_ip ? [1] : []
@@ -100,12 +115,14 @@ resource "google_compute_instance_template" "tpl" {
         # Add access_config settings here if needed
       }
     }
+
     dynamic "ipv6_access_config" {
       for_each = var.ipv6_access_config
       content {
         network_tier = ipv6_access_config.value.network_tier
       }
     }
+
     dynamic "alias_ip_range" {
       for_each = local.alias_ip_range_enabled ? [var.alias_ip_range] : []
       content {
@@ -122,16 +139,29 @@ resource "google_compute_instance_template" "tpl" {
       subnetwork         = network_interface.value.subnetwork
       subnetwork_project = network_interface.value.subnetwork_project
       network_ip         = length(network_interface.value.network_ip) > 0 ? network_interface.value.network_ip : null
+      nic_type           = network_interface.value.nic_type
+      stack_type         = network_interface.value.stack_type
+      queue_count        = network_interface.value.queue_count
       dynamic "access_config" {
-        for_each = var.enable_public_ip ? [1] : []
+        for_each = network_interface.value.access_config
         content {
-          # Add access_config settings here if needed
+          nat_ip       = access_config.value.nat_ip
+          network_tier = access_config.value.network_tier
         }
       }
+
       dynamic "ipv6_access_config" {
         for_each = network_interface.value.ipv6_access_config
         content {
           network_tier = ipv6_access_config.value.network_tier
+        }
+      }
+
+      dynamic "alias_ip_range" {
+        for_each = network_interface.value.alias_ip_range
+        content {
+          ip_cidr_range         = alias_ip_range.value.ip_cidr_range
+          subnetwork_range_name = alias_ip_range.value.subnetwork_range_name
         }
       }
     }
@@ -142,9 +172,11 @@ resource "google_compute_instance_template" "tpl" {
   }
 
   scheduling {
-    preemptible         = var.preemptible
-    automatic_restart   = local.automatic_restart
-    on_host_maintenance = local.on_host_maintenance
+    automatic_restart           = local.automatic_restart
+    instance_termination_action = var.spot ? var.spot_instance_termination_action : null
+    on_host_maintenance         = local.on_host_maintenance
+    preemptible                 = local.preemptible
+    provisioning_model          = var.spot ? "SPOT" : null
   }
 
   advanced_machine_features {
@@ -163,6 +195,11 @@ resource "google_compute_instance_template" "tpl" {
 
   confidential_instance_config {
     enable_confidential_compute = var.enable_confidential_vm
+    confidential_instance_type  = var.confidential_instance_type
+  }
+
+  network_performance_config {
+    total_egress_bandwidth_tier = var.total_egress_bandwidth_tier
   }
 
   dynamic "guest_accelerator" {
@@ -172,63 +209,4 @@ resource "google_compute_instance_template" "tpl" {
       count = guest_accelerator.value.count
     }
   }
-}
-locals {
-  static_ips        = concat(var.static_ips, ["NOT_AN_IP"])
-  network_interface = length(format("%s%s", var.network, var.subnetwork)) == 0 ? [] : [1]
-}
-
-data "google_compute_zones" "available" {
-  project = data.google_client_config.current.project
-  region  = var.region
-}
-
-#--------------------------------------------------------------------------------
-#Manages a VM instance resource within GCE.
-#--------------------------------------------------------------------------------
-resource "google_compute_instance_from_template" "compute_instance" {
-  provider            = google
-  count               = var.instance_from_template ? 1 : 0
-  name                = format("%s-%s", module.labels.id, (count.index))
-  project             = data.google_client_config.current.project
-  zone                = var.zone == null ? data.google_compute_zones.available.names[count.index % length(data.google_compute_zones.available.names)] : var.zone
-  deletion_protection = var.deletion_protection
-  resource_policies   = var.resource_policies
-
-  dynamic "network_interface" {
-    for_each = local.network_interface
-
-    content {
-      network            = var.network
-      subnetwork         = var.subnetwork
-      subnetwork_project = var.subnetwork_project
-      network_ip         = length(var.static_ips) == 0 ? "" : element(local.static_ips, count.index)
-
-      dynamic "access_config" {
-        for_each = var.enable_public_ip ? [1] : []
-        content {
-          # Add access_config settings here if needed
-        }
-      }
-      dynamic "ipv6_access_config" {
-        for_each = var.ipv6_access_config
-        content {
-          network_tier = ipv6_access_config.value.network_tier
-        }
-      }
-
-      dynamic "alias_ip_range" {
-        for_each = var.alias_ip_ranges
-        content {
-          ip_cidr_range         = alias_ip_range.value.ip_cidr_range
-          subnetwork_range_name = alias_ip_range.value.subnetwork_range_name
-        }
-      }
-    }
-  }
-  service_account {
-    email  = var.service_account_email
-    scopes = var.service_account_scopes
-  }
-  source_instance_template = var.source_instance_template
 }

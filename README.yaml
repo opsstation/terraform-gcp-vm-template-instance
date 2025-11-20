@@ -1,0 +1,165 @@
+---
+#
+# This is the canonical configuration for the `README.md`
+# Run `make readme` to rebuild the `README.md`
+
+# Name of this project
+name: Terraform GCP template-instance
+
+# License of this project
+license: "APACHE"
+
+# Canonical GitHub repo
+github_repo: opsstation/terraform-gcp-template-instance
+
+# Badges to display
+badges:
+  - name: "Latest Release"
+    image: "https://img.shields.io/github/release/opsstation/terraform-gcp-template-instance.svg"
+    url: "https://github.com/opsstation/terraform-gcp-template-instance/releases/latest"
+  - name: "tfsec"
+    image: "https://github.com/opsstation/terraform-gcp-template-instance/actions/workflows/tfsec.yml/badge.svg"
+    url: "https://github.com/opsstation/terraform-gcp-template-instance/actions/workflows/tfsec.yml"
+  - name: "Licence"
+    image: "https://img.shields.io/badge/License-APACHE-blue.svg"
+    url: "LICENSE.md"
+  - name: "Changelog"
+    image: "https://img.shields.io/badge/Changelog-blue"
+    url: "CHANGELOG.md"
+
+prerequesties:
+  - name: Terraform
+    url: https://learn.hashicorp.com/terraform/getting-started/install.html
+    version: ">= 1.13.3"
+
+providers:
+  - name: google
+    url: https://registry.terraform.io/providers/hashicorp/google
+    version: ">= 5.31.0"
+
+
+module_dependencies:
+  - name: Labels Module
+    url: https://github.com/opsstation/terraform-multicloud-labels
+    description: Provides resource tagging.
+
+  - name: VPC Module
+    url: https://github.com/opsstation/terraform-gcp-vpc
+    description: Creates and manages VPC networks and subnets.
+
+  - name: Subnet Module
+    url: https://github.com/opsstation/terraform-gcp-subnet
+    description: Creates and manages GCP subnets inside the VPC.
+
+  - name: Firewall Module
+    url: https://github.com/opsstation/terraform-gcp-firewall
+    description: Manages GCP firewall rules for networks and services.
+
+  - name: Service Account Module
+    url: https://github.com/opsstation/terraform-gcp-service-account
+    description: Creates and manages GCP service accounts and roles.
+
+
+#  description of this project
+description: |-
+  Terraform module template-instance to create new modules using this as baseline
+
+# How to use this project
+usage: |-
+  Here are some examples of how you can use this module in your inventory structure:
+
+  ### simple_template Example
+  ```hcl
+  module "simple_template" {
+    source               = "opsstation/template-instance/gcp"
+    version              = "1.0.1"
+    name                 = "dev"
+    environment          = "test"
+    stack_type           = "IPV4_ONLY"
+    region               = "asia-northeast1"
+    source_image         = "ubuntu-2204-jammy-v20230908"
+    source_image_family  = "ubuntu-2204-lts"
+    source_image_project = "ubuntu-os-cloud"
+    disk_size_gb         = "20"
+    subnetwork           = module.subnet.subnet_self_link_public
+    instance_template    = true
+    service_account      = null
+    enable_public_ip     = true
+
+    metadata = {
+      ssh-keys = <<EOF
+          dev:ssh-rsa AAAAB3NzaC1yc2EAA/3mwt2y+PDQMU= suresh@suresh
+        EOF
+    }
+  }
+  ```
+
+  ---
+
+  ### instance_template (Alias IP Range) Example
+  ```hcl
+  module "instance_template" {
+    source            = "opsstation/template-instance/gcp"
+    version           = "1.0.1"
+    name              = "alias-ip-range"
+    environment       = "test"
+    instance_template = true
+    subnetwork        = module.subnet.subnet_id
+
+    service_account = {
+      email  = module.service-account.account_email
+      scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+    }
+
+    alias_ip_range = {
+      ip_cidr_range         = "/24"
+      subnetwork_range_name = module.subnet.subnet_name
+    }
+  }
+  ```
+
+  ---
+
+  ### instance_template (Additional Disks) Example
+  ```hcl
+  module "instance_template" {
+    source            = "opsstation/template-instance/gcp"
+    version           = "1.0.1"
+    name              = "additional-disks"
+    environment       = "test"
+    subnetwork        = module.subnet.subnet_self_link_public
+    instance_template = true
+
+    service_account = null
+
+    additional_disks = [
+      {
+        disk_name    = "disk-0"
+        device_name  = "disk-0"
+        disk_size_gb = 10
+        disk_type    = "pd-standard"
+        auto_delete  = "true"
+        boot         = "false"
+        disk_labels  = {}
+      },
+      {
+        disk_name    = "disk-1"
+        device_name  = "disk-1"
+        disk_size_gb = 10
+        disk_type    = "pd-standard"
+        auto_delete  = "true"
+        boot         = "false"
+        disk_labels  = { "foo" : "bar" }
+      },
+      {
+        disk_name    = "disk-2"
+        device_name  = "disk-2"
+        disk_size_gb = 10
+        disk_type    = "pd-standard"
+        auto_delete  = "true"
+        boot         = "false"
+        disk_labels  = { "foo" : "bar" }
+      }
+    ]
+  }
+  ```
